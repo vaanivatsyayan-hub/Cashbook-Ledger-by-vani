@@ -48,6 +48,14 @@ const generateId = () => {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 };
 
+// Formatting utility for Indian Number System
+const formatCurrency = (num: number) => {
+  return num.toLocaleString('en-IN', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
+};
+
 // --- REUSABLE SUB-COMPONENTS ---
 
 const Modal: React.FC<{ 
@@ -389,15 +397,15 @@ const App: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               <div className="glass-card p-5 md:p-6 rounded-2xl">
                 <p className="text-slate-400 text-xs md:text-sm font-medium">Net Balance</p>
-                <h3 className={`text-xl md:text-2xl font-bold mt-2 ${stats.totalBalance >= 0 ? 'text-green-400' : 'text-red-400'}`}>₹{stats.totalBalance.toLocaleString()}</h3>
+                <h3 className={`text-xl md:text-2xl font-bold mt-2 ${stats.totalBalance >= 0 ? 'text-green-400' : 'text-red-400'}`}>₹{formatCurrency(stats.totalBalance)}</h3>
               </div>
               <div className="glass-card p-5 md:p-6 rounded-2xl">
                 <p className="text-slate-400 text-xs md:text-sm font-medium">Total Debits</p>
-                <h3 className="text-xl md:text-2xl font-bold mt-2 text-red-400">₹{stats.totalDebit.toLocaleString()}</h3>
+                <h3 className="text-xl md:text-2xl font-bold mt-2 text-red-400">₹{formatCurrency(stats.totalDebit)}</h3>
               </div>
               <div className="glass-card p-5 md:p-6 rounded-2xl">
                 <p className="text-slate-400 text-xs md:text-sm font-medium">Total Credits</p>
-                <h3 className="text-xl md:text-2xl font-bold mt-2 text-green-400">₹{stats.totalCredit.toLocaleString()}</h3>
+                <h3 className="text-xl md:text-2xl font-bold mt-2 text-green-400">₹{formatCurrency(stats.totalCredit)}</h3>
               </div>
               <div className="glass-card p-5 md:p-6 rounded-2xl">
                 <p className="text-slate-400 text-xs md:text-sm font-medium">Companies</p>
@@ -442,7 +450,7 @@ const App: React.FC = () => {
                         </div>
                         <div className="text-right shrink-0 ml-2">
                           <p className={`text-xs md:text-sm font-bold ${tx.type === 'DEBIT' ? 'text-red-400' : 'text-green-400'}`}>
-                            {tx.type === 'DEBIT' ? '-' : '+'}₹{tx.amount.toLocaleString()}
+                            {tx.type === 'DEBIT' ? '-' : '+'}₹{formatCurrency(tx.amount)}
                           </p>
                           <p className="text-[10px] text-slate-500">{tx.date}</p>
                         </div>
@@ -514,7 +522,7 @@ const App: React.FC = () => {
                         <div className="grid grid-cols-2 gap-3 md:gap-4">
                           <div className="p-2 md:p-3 rounded-xl bg-white/5">
                             <p className="text-[10px] text-slate-500 font-bold mb-1 uppercase">Balance</p>
-                            <p className={`text-xs md:text-sm font-bold ${bal >= 0 ? 'text-green-400' : 'text-red-400'}`}>₹{Math.abs(bal).toLocaleString()}</p>
+                            <p className={`text-xs md:text-sm font-bold ${bal >= 0 ? 'text-green-400' : 'text-red-400'}`}>₹{formatCurrency(Math.abs(bal))}</p>
                           </div>
                           <div className="p-2 md:p-3 rounded-xl bg-white/5">
                             <p className="text-[10px] text-slate-500 font-bold mb-1 uppercase">Type</p>
@@ -554,9 +562,9 @@ const App: React.FC = () => {
                     </button>
                   </div>
                   <div className="flex w-full justify-between sm:justify-end sm:space-x-8 text-right bg-white/5 p-4 rounded-xl border border-white/5">
-                    <div><p className="text-[10px] font-bold text-slate-500 uppercase">Debits</p><p className="text-base md:text-lg font-bold text-red-400">₹{transactions.filter(t => t.customerId === selectedCustomerId && t.type === 'DEBIT').reduce((s, t) => s + t.amount, 0).toLocaleString()}</p></div>
+                    <div><p className="text-[10px] font-bold text-slate-500 uppercase">Debits</p><p className="text-base md:text-lg font-bold text-red-400">₹{formatCurrency(transactions.filter(t => t.customerId === selectedCustomerId && t.type === 'DEBIT').reduce((s, t) => s + t.amount, 0))}</p></div>
                     <div className="hidden sm:block w-px h-8 bg-white/10 mx-4 self-center"></div>
-                    <div><p className="text-[10px] font-bold text-slate-500 uppercase">Credits</p><p className="text-base md:text-lg font-bold text-green-400">₹{transactions.filter(t => t.customerId === selectedCustomerId && t.type === 'CREDIT').reduce((s, t) => s + t.amount, 0).toLocaleString()}</p></div>
+                    <div><p className="text-[10px] font-bold text-slate-500 uppercase">Credits</p><p className="text-base md:text-lg font-bold text-green-400">₹{formatCurrency(transactions.filter(t => t.customerId === selectedCustomerId && t.type === 'CREDIT').reduce((s, t) => s + t.amount, 0))}</p></div>
                   </div>
                 </div>
                 
@@ -578,7 +586,7 @@ const App: React.FC = () => {
                         <td className="px-6 py-4 text-sm font-semibold text-white">Opening Balance</td>
                         <td className="px-6 py-4">-</td>
                         <td className="px-6 py-4">-</td>
-                        <td className="px-6 py-4 text-right font-bold text-white">₹{currentCustomer?.openingBalance.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-right font-bold text-white">₹{formatCurrency(currentCustomer?.openingBalance || 0)}</td>
                         <td className="px-6 py-4"></td>
                       </tr>
                       {(() => {
@@ -590,9 +598,9 @@ const App: React.FC = () => {
                             <tr key={tx.id} className="hover:bg-white/5 group transition-colors">
                               <td className="px-6 py-4 text-sm text-slate-400 whitespace-nowrap">{tx.date}</td>
                               <td className="px-6 py-4 text-sm text-white max-w-[200px] truncate">{tx.description}</td>
-                              <td className="px-6 py-4 text-sm text-right font-bold text-red-400">{tx.type === 'DEBIT' ? `₹${tx.amount.toLocaleString()}` : '-'}</td>
-                              <td className="px-6 py-4 text-sm text-right font-bold text-green-400">{tx.type === 'CREDIT' ? `₹${tx.amount.toLocaleString()}` : '-'}</td>
-                              <td className="px-6 py-4 text-sm text-right font-bold text-white whitespace-nowrap">₹{Math.abs(runningBal).toLocaleString()} <span className="text-[10px] text-slate-500">{runningBal >= 0 ? 'CR' : 'DR'}</span></td>
+                              <td className="px-6 py-4 text-sm text-right font-bold text-red-400">{tx.type === 'DEBIT' ? `₹${formatCurrency(tx.amount)}` : '-'}</td>
+                              <td className="px-6 py-4 text-sm text-right font-bold text-green-400">{tx.type === 'CREDIT' ? `₹${formatCurrency(tx.amount)}` : '-'}</td>
+                              <td className="px-6 py-4 text-sm text-right font-bold text-white whitespace-nowrap">₹{formatCurrency(Math.abs(runningBal))} <span className="text-[10px] text-slate-500">{runningBal >= 0 ? 'CR' : 'DR'}</span></td>
                               <td className="px-6 py-4 text-center">
                                 <button onClick={() => deleteTransaction(tx.id)} className="p-2 text-slate-600 hover:text-red-400 opacity-50 lg:opacity-0 lg:group-hover:opacity-100 transition-all">
                                   <Trash2 size={16} />
