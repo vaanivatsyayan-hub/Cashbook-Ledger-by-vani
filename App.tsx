@@ -34,6 +34,7 @@ import {
   Area 
 } from 'recharts';
 import { Company, Customer, Transaction, TransactionType } from './types';
+import { supabase } from './supabase';
 
 // --- UTILS ---
 const loadData = <T,>(key: string, defaultValue: T): T => {
@@ -140,9 +141,10 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // App State
-  const [companies, setCompanies] = useState<Company[]>(() => loadData('companies', []));
-  const [customers, setCustomers] = useState<Customer[]>(() => loadData('customers', []));
-  const [transactions, setTransactions] = useState<Transaction[]>(() => loadData('transactions', []));
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Selection Context
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
@@ -161,12 +163,49 @@ const App: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Persistence
+  // Persistence & Initial Fetch
   useEffect(() => {
-    localStorage.setItem('companies', JSON.stringify(companies));
-    localStorage.setItem('customers', JSON.stringify(customers));
-    localStorage.setItem('transactions', JSON.stringify(transactions));
-  }, [companies, customers, transactions]);
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const [
+          { data: cos, error: coErr },
+          { data: cus, error: cuErr },
+          { data: txs, error: txErr }
+        ] = await Promise.all([
+          supabase.from('companies').select('*'),
+          supabase.from('customers').select('*'),
+          supabase.from('transactions').select('*')
+        ]);
+
+        if (coErr) throw coErr;
+        if (cuErr) throw cuErr;
+        if (txErr) throw txErr;
+
+        if (cos) setCompanies(cos);
+        if (cus) setCustomers(cus);
+        if (txs) setTransactions(txs);
+      } catch (error) {
+        console.error('Error fetching data from Supabase:', error);
+        // Fallback to localStorage if Supabase fails
+        setCompanies(loadData('companies', []));
+        setCustomers(loadData('customers', []));
+        setTransactions(loadData('transactions', []));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (!isLoading) {
+      localStorage.setItem('companies', JSON.stringify(companies));
+      localStorage.setItem('customers', JSON.stringify(customers));
+      localStorage.setItem('transactions', JSON.stringify(transactions));
+    }
+  }, [companies, customers, transactions, isLoading]);
 
   // Derived Data
   const currentCompany = companies.find(c => c.id === selectedCompanyId);
@@ -202,7 +241,7 @@ const App: React.FC = () => {
   }, [transactions]);
 
   // Handlers
-  const handleAddCompany = () => {
+  const handleAddCompany = async () => {
     if (!companyForm.name) return;
     const newCompany: Company = { 
       id: generateId(), 
@@ -211,12 +250,23 @@ const App: React.FC = () => {
       gst: companyForm.gst, 
       financialYear: companyForm.fy 
     };
-    setCompanies([...companies, newCompany]);
-    setCompanyForm({ name: '', address: '', gst: '', fy: '2024-25' });
-    setIsCompanyModalOpen(false);
+
+    try {
+      const { error } = await supabase.from('companies').insert([newCompany]);
+      if (error) throw error;
+      setCompanies([...companies, newCompany]);
+      setCompanyForm({ name: '', address: '', gst: '', fy: '2024-25' });
+      setIsCompanyModalOpen(false);
+    } catch (error) {
+      console.error('Error adding company:', error);
+      alert('Failed to add company to cloud. It will be saved locally.');
+      setCompanies([...companies, newCompany]);
+      setCompanyForm({ name: '', address: '', gst: '', fy: '2024-25' });
+      setIsCompanyModalOpen(false);
+    }
   };
 
-  const handleAddCustomer = () => {
+  const handleAddCustomer = async () => {
     if (!selectedCompanyId || !customerForm.name) return;
     const newCustomer: Customer = {
       id: generateId(),
@@ -226,12 +276,23 @@ const App: React.FC = () => {
       address: '',
       openingBalance: Number(customerForm.openingBalance) || 0
     };
-    setCustomers([...customers, newCustomer]);
-    setCustomerForm({ name: '', phone: '', openingBalance: '' });
-    setIsCustomerModalOpen(false);
+
+    try {
+      const { error } = await supabase.from('customers').insert([newCustomer]);
+      if (error) throw error;
+      setCustomers([...customers, newCustomer]);
+      setCustomerForm({ name: '', phone: '', openingBalance: '' });
+      setIsCustomerModalOpen(false);
+    } catch (error) {
+      console.error('Error adding customer:', error);
+      alert('Failed to add customer to cloud.');
+      setCustomers([...customers, newCustomer]);
+      setCustomerForm({ name: '', phone: '', openingBalance: '' });
+      setIsCustomerModalOpen(false);
+    }
   };
 
-  const handleAddTransaction = () => {
+  const handleAddTransaction = async () => {
     if (!selectedCustomerId || !txForm.amount) return;
     const newTx: Transaction = {
       id: generateId(),
@@ -241,14 +302,33 @@ const App: React.FC = () => {
       type: txForm.type,
       amount: Number(txForm.amount)
     };
-    setTransactions([...transactions, newTx]);
-    setTxForm({ date: new Date().toISOString().split('T')[0], desc: '', type: 'CREDIT', amount: '' });
-    setIsTransactionModalOpen(false);
+
+    try {
+      const { error } = await supabase.from('transactions').insert([newTx]);
+      if (error) throw error;
+      setTransactions([...transactions, newTx]);
+      setTxForm({ date: new Date().toISOString().split('T')[0], desc: '', type: 'CREDIT', amount: '' });
+      setIsTransactionModalOpen(false);
+    } catch (error) {
+      console.error('Error adding transaction:', error);
+      alert('Failed to add transaction to cloud.');
+      setTransactions([...transactions, newTx]);
+      setTxForm({ date: new Date().toISOString().split('T')[0], desc: '', type: 'CREDIT', amount: '' });
+      setIsTransactionModalOpen(false);
+    }
   };
 
-  const deleteTransaction = (id: string) => {
+  const deleteTransaction = async (id: string) => {
     if (confirm("Are you sure you want to delete this transaction?")) {
-      setTransactions(transactions.filter(t => t.id !== id));
+      try {
+        const { error } = await supabase.from('transactions').delete().eq('id', id);
+        if (error) throw error;
+        setTransactions(transactions.filter(t => t.id !== id));
+      } catch (error) {
+        console.error('Error deleting transaction:', error);
+        alert('Failed to delete transaction from cloud.');
+        setTransactions(transactions.filter(t => t.id !== id));
+      }
     }
   };
 
@@ -296,12 +376,35 @@ const App: React.FC = () => {
     event.target.value = '';
   };
 
-  const simulateGoogleDriveSync = () => {
+  const handleSupabaseSync = async () => {
     setIsSyncing(true);
-    setTimeout(() => {
+    try {
+      // Fetch fresh data from Supabase
+      const [
+        { data: cos, error: coErr },
+        { data: cus, error: cuErr },
+        { data: txs, error: txErr }
+      ] = await Promise.all([
+        supabase.from('companies').select('*'),
+        supabase.from('customers').select('*'),
+        supabase.from('transactions').select('*')
+      ]);
+
+      if (coErr) throw coErr;
+      if (cuErr) throw cuErr;
+      if (txErr) throw txErr;
+
+      if (cos) setCompanies(cos);
+      if (cus) setCustomers(cus);
+      if (txs) setTransactions(txs);
+      
+      alert("Success: Ledger synced with Supabase Cloud!");
+    } catch (error) {
+      console.error('Sync error:', error);
+      alert("Error: Failed to sync with Supabase.");
+    } finally {
       setIsSyncing(false);
-      alert("Success: Ledger synced with Google Drive!");
-    }, 2500);
+    }
   };
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
@@ -640,15 +743,15 @@ const App: React.FC = () => {
               <div className="glass-card p-6 md:p-8 rounded-3xl flex flex-col">
                 <div className="flex items-center space-x-4 mb-6">
                   <div className="w-10 h-10 md:w-12 md:h-12 bg-green-500/20 text-green-400 rounded-2xl flex items-center justify-center shrink-0"><CloudUpload size={24} /></div>
-                  <div className="min-w-0"><h3 className="text-lg md:text-xl font-bold text-white truncate">Google Drive</h3><p className="text-xs md:text-sm text-slate-500">Auto cloud synchronization</p></div>
+                  <div className="min-w-0"><h3 className="text-lg md:text-xl font-bold text-white truncate">Supabase Cloud</h3><p className="text-xs md:text-sm text-slate-500">Real-time cloud synchronization</p></div>
                 </div>
                 <div className="bg-slate-900/50 rounded-2xl p-4 border border-white/5 mb-6 text-xs text-slate-400 space-y-2">
-                  <div className="flex justify-between"><span>Status</span><span className="text-slate-500 italic">Disconnected</span></div>
-                  <div className="flex justify-between"><span>Last Backup</span><span className="text-slate-500 italic">None</span></div>
+                  <div className="flex justify-between"><span>Status</span><span className="text-green-500 font-bold">Connected</span></div>
+                  <div className="flex justify-between"><span>Database</span><span className="text-slate-500 italic">Supabase PostgreSQL</span></div>
                 </div>
-                <button onClick={simulateGoogleDriveSync} disabled={isSyncing} className={`w-full font-bold py-3.5 rounded-xl flex items-center justify-center space-x-3 transition-all text-sm ${isSyncing ? 'bg-slate-800 text-slate-500' : 'bg-green-600 hover:bg-green-500 text-white'}`}>
+                <button onClick={handleSupabaseSync} disabled={isSyncing} className={`w-full font-bold py-3.5 rounded-xl flex items-center justify-center space-x-3 transition-all text-sm ${isSyncing ? 'bg-slate-800 text-slate-500' : 'bg-green-600 hover:bg-green-500 text-white'}`}>
                   {isSyncing ? <RefreshCw size={18} className="animate-spin" /> : <CloudUpload size={18} />}
-                  <span>{isSyncing ? 'Connecting...' : 'Sync Cloud Drive'}</span>
+                  <span>{isSyncing ? 'Syncing...' : 'Sync with Supabase'}</span>
                 </button>
               </div>
             </div>
