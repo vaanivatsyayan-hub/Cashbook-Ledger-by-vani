@@ -137,27 +137,27 @@ const SidebarItem: React.FC<{
 
 const App: React.FC = () => {
   // Navigation State
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'companies' | 'customers' | 'ledger' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'organizations' | 'customers' | 'ledger' | 'settings'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // App State
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [organizations, setOrganizations] = useState<Company[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Selection Context
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
   // Modal States
-  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
+  const [isOrgModalOpen, setIsOrgModalOpen] = useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Form States
-  const [companyForm, setCompanyForm] = useState({ name: '', address: '', gst: '', fy: '2024-25' });
+  const [orgForm, setOrgForm] = useState({ name: '', address: '', gst: '', fy: '2024-25' });
   const [customerForm, setCustomerForm] = useState({ name: '', phone: '', openingBalance: '' });
   const [txForm, setTxForm] = useState({ date: new Date().toISOString().split('T')[0], desc: '', type: 'CREDIT' as TransactionType, amount: '' });
 
@@ -169,7 +169,7 @@ const App: React.FC = () => {
       setIsLoading(true);
       try {
         const [
-          { data: cos, error: coErr },
+          { data: orgs, error: orgErr },
           { data: cus, error: cuErr },
           { data: txs, error: txErr }
         ] = await Promise.all([
@@ -178,17 +178,17 @@ const App: React.FC = () => {
           supabase.from('transactions').select('*')
         ]);
 
-        if (coErr) throw coErr;
+        if (orgErr) throw orgErr;
         if (cuErr) throw cuErr;
         if (txErr) throw txErr;
 
-        if (cos) setCompanies(cos);
+        if (orgs) setOrganizations(orgs);
         if (cus) setCustomers(cus);
         if (txs) setTransactions(txs);
       } catch (error) {
         console.error('Error fetching data from Supabase:', error);
         // Fallback to localStorage if Supabase fails
-        setCompanies(loadData('companies', []));
+        setOrganizations(loadData('companies', []));
         setCustomers(loadData('customers', []));
         setTransactions(loadData('transactions', []));
       } finally {
@@ -201,14 +201,14 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!isLoading) {
-      localStorage.setItem('companies', JSON.stringify(companies));
+      localStorage.setItem('companies', JSON.stringify(organizations));
       localStorage.setItem('customers', JSON.stringify(customers));
       localStorage.setItem('transactions', JSON.stringify(transactions));
     }
-  }, [companies, customers, transactions, isLoading]);
+  }, [organizations, customers, transactions, isLoading]);
 
   // Derived Data
-  const currentCompany = companies.find(c => c.id === selectedCompanyId);
+  const currentOrg = organizations.find(o => o.id === selectedOrgId);
   const currentCustomer = customers.find(c => c.id === selectedCustomerId);
 
   const stats = useMemo(() => {
@@ -218,10 +218,10 @@ const App: React.FC = () => {
       totalBalance: totalCredit - totalDebit,
       totalDebit,
       totalCredit,
-      activeCompanies: companies.length,
+      activeOrgs: organizations.length,
       activeCustomers: customers.length
     };
-  }, [transactions, companies, customers]);
+  }, [transactions, organizations, customers]);
 
   const chartData = useMemo(() => {
     const days = Array.from({ length: 7 }, (_, i) => {
@@ -241,36 +241,33 @@ const App: React.FC = () => {
   }, [transactions]);
 
   // Handlers
-  const handleAddCompany = async () => {
-    if (!companyForm.name) return;
-    const newCompany: Company = { 
+  const handleAddOrg = async () => {
+    if (!orgForm.name) return;
+    const newOrg: Company = { 
       id: generateId(), 
-      name: companyForm.name, 
-      address: companyForm.address, 
-      gst: companyForm.gst, 
-      financialYear: companyForm.fy 
+      name: orgForm.name, 
+      address: orgForm.address, 
+      gst: orgForm.gst, 
+      financialYear: orgForm.fy 
     };
 
     try {
-      const { error } = await supabase.from('companies').insert([newCompany]);
+      const { error } = await supabase.from('companies').insert([newOrg]);
       if (error) throw error;
-      setCompanies([...companies, newCompany]);
-      setCompanyForm({ name: '', address: '', gst: '', fy: '2024-25' });
-      setIsCompanyModalOpen(false);
+      setOrganizations([...organizations, newOrg]);
+      setOrgForm({ name: '', address: '', gst: '', fy: '2024-25' });
+      setIsOrgModalOpen(false);
     } catch (error) {
-      console.error('Error adding company:', error);
-      alert('Failed to add company to cloud. It will be saved locally.');
-      setCompanies([...companies, newCompany]);
-      setCompanyForm({ name: '', address: '', gst: '', fy: '2024-25' });
-      setIsCompanyModalOpen(false);
+      console.error('Error adding organization:', error);
+      alert('Failed to save organization to Supabase. Please check your database connection.');
     }
   };
 
   const handleAddCustomer = async () => {
-    if (!selectedCompanyId || !customerForm.name) return;
+    if (!selectedOrgId || !customerForm.name) return;
     const newCustomer: Customer = {
       id: generateId(),
-      companyId: selectedCompanyId,
+      companyId: selectedOrgId,
       name: customerForm.name,
       phone: customerForm.phone,
       address: '',
@@ -286,9 +283,6 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('Error adding customer:', error);
       alert('Failed to add customer to cloud.');
-      setCustomers([...customers, newCustomer]);
-      setCustomerForm({ name: '', phone: '', openingBalance: '' });
-      setIsCustomerModalOpen(false);
     }
   };
 
@@ -334,7 +328,7 @@ const App: React.FC = () => {
 
   const handleExportBackup = () => {
     const backupData = {
-      companies,
+      organizations,
       customers,
       transactions,
       exportedAt: new Date().toISOString(),
@@ -360,7 +354,7 @@ const App: React.FC = () => {
         const data = JSON.parse(e.target?.result as string);
         if (data.companies && data.customers && data.transactions) {
           if (confirm("This will replace all your current data. Do you want to continue?")) {
-            setCompanies(data.companies);
+            setOrganizations(data.companies);
             setCustomers(data.customers);
             setTransactions(data.transactions);
             alert("Backup restored successfully!");
@@ -394,7 +388,7 @@ const App: React.FC = () => {
       if (cuErr) throw cuErr;
       if (txErr) throw txErr;
 
-      if (cos) setCompanies(cos);
+      if (cos) setOrganizations(cos);
       if (cus) setCustomers(cus);
       if (txs) setTransactions(txs);
       
@@ -445,7 +439,7 @@ const App: React.FC = () => {
 
         <nav className="flex-1 mt-4 overflow-y-auto custom-scrollbar">
           <SidebarItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => closeSidebarOnMobile('dashboard')} />
-          <SidebarItem icon={<Building2 size={20} />} label="Companies" active={activeTab === 'companies'} onClick={() => closeSidebarOnMobile('companies')} badge={companies.length} />
+          <SidebarItem icon={<Building2 size={20} />} label="Organizations" active={activeTab === 'organizations'} onClick={() => closeSidebarOnMobile('organizations')} badge={organizations.length} />
           <SidebarItem icon={<Users size={20} />} label="Customers" active={activeTab === 'customers'} onClick={() => closeSidebarOnMobile('customers')} badge={customers.length} />
           <SidebarItem icon={<BookOpen size={20} />} label="Ledger" active={activeTab === 'ledger'} onClick={() => closeSidebarOnMobile('ledger')} />
           <SidebarItem icon={<Settings size={20} />} label="Settings" active={activeTab === 'settings'} onClick={() => closeSidebarOnMobile('settings')} />
@@ -474,18 +468,18 @@ const App: React.FC = () => {
               <h2 className="text-2xl md:text-3xl font-bold text-white capitalize">{activeTab}</h2>
               <p className="text-slate-400 text-xs md:text-sm mt-1">
                 {activeTab === 'dashboard' && "Business Overview"}
-                {activeTab === 'companies' && "Manage Organizations"}
-                {activeTab === 'customers' && (selectedCompanyId ? `Customers of ${currentCompany?.name}` : "Select a company")}
+                {activeTab === 'organizations' && "Manage Organizations"}
+                {activeTab === 'customers' && (selectedOrgId ? `Customers of ${currentOrg?.name}` : "Select an organization")}
                 {activeTab === 'ledger' && (selectedCustomerId ? `Ledger: ${currentCustomer?.name}` : "Select a customer")}
                 {activeTab === 'settings' && "Backup & Management"}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {selectedCompanyId && (
+            {selectedOrgId && (
               <div className="glass px-3 py-1.5 md:px-4 md:py-2 rounded-xl flex items-center space-x-2 border border-blue-500/20 max-w-[200px]">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shrink-0"></div>
-                <span className="text-xs md:text-sm font-medium text-slate-300 truncate">{currentCompany?.name}</span>
+                <span className="text-xs md:text-sm font-medium text-slate-300 truncate">{currentOrg?.name}</span>
               </div>
             )}
             <div onClick={() => setActiveTab('settings')} className={`glass p-2 rounded-xl text-slate-400 hover:text-white cursor-pointer border ${activeTab === 'settings' ? 'border-blue-500 bg-blue-500/10' : 'border-white/5'}`}>
@@ -511,8 +505,8 @@ const App: React.FC = () => {
                 <h3 className="text-xl md:text-2xl font-bold mt-2 text-green-400">₹{formatCurrency(stats.totalCredit)}</h3>
               </div>
               <div className="glass-card p-5 md:p-6 rounded-2xl">
-                <p className="text-slate-400 text-xs md:text-sm font-medium">Companies</p>
-                <h3 className="text-xl md:text-2xl font-bold mt-2 text-blue-400">{stats.activeCompanies}</h3>
+                <p className="text-slate-400 text-xs md:text-sm font-medium">Organizations</p>
+                <h3 className="text-xl md:text-2xl font-bold mt-2 text-blue-400">{stats.activeOrgs}</h3>
               </div>
             </div>
 
@@ -567,23 +561,23 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* COMPANIES */}
-        {activeTab === 'companies' && (
+        {/* ORGANIZATIONS */}
+        {activeTab === 'organizations' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4">
-            <div onClick={() => setIsCompanyModalOpen(true)} className="group cursor-pointer flex flex-col items-center justify-center p-8 rounded-3xl border-2 border-dashed border-white/10 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all min-h-[180px]">
+            <div onClick={() => setIsOrgModalOpen(true)} className="group cursor-pointer flex flex-col items-center justify-center p-8 rounded-3xl border-2 border-dashed border-white/10 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all min-h-[180px]">
               <Plus className="text-slate-400 group-hover:text-blue-400 mb-4" size={32} />
-              <span className="text-slate-400 font-semibold text-sm group-hover:text-blue-400">Add New Company</span>
+              <span className="text-slate-400 font-semibold text-sm group-hover:text-blue-400">Add New Organization</span>
             </div>
-            {companies.map((company) => (
-              <div key={company.id} onClick={() => { setSelectedCompanyId(company.id); setActiveTab('customers'); }} className={`glass-card p-6 md:p-8 rounded-3xl cursor-pointer group ${selectedCompanyId === company.id ? 'ring-2 ring-blue-500' : ''}`}>
+            {organizations.map((org) => (
+              <div key={org.id} onClick={() => { setSelectedOrgId(org.id); setActiveTab('customers'); }} className={`glass-card p-6 md:p-8 rounded-3xl cursor-pointer group ${selectedOrgId === org.id ? 'ring-2 ring-blue-500' : ''}`}>
                 <div className="flex justify-between items-start mb-6">
                   <div className="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg"><Building2 className="text-white" size={24} /></div>
-                  <div className="text-right"><p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">FY {company.financialYear}</p></div>
+                  <div className="text-right"><p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">FY {org.financialYear}</p></div>
                 </div>
-                <h4 className="text-xl md:text-2xl font-bold text-white mb-2 truncate">{company.name}</h4>
-                <p className="text-slate-400 text-xs md:text-sm line-clamp-1 mb-6">📍 {company.address || "No address"}</p>
+                <h4 className="text-xl md:text-2xl font-bold text-white mb-2 truncate">{org.name}</h4>
+                <p className="text-slate-400 text-xs md:text-sm line-clamp-1 mb-6">📍 {org.address || "No address"}</p>
                 <div className="flex justify-between items-center pt-4 md:pt-6 border-t border-white/5">
-                  <div className="text-[10px] md:text-xs text-slate-500 font-mono">{company.gst || 'GST N/A'}</div>
+                  <div className="text-[10px] md:text-xs text-slate-500 font-mono">{org.gst || 'GST N/A'}</div>
                   <ChevronRight size={18} className="text-slate-500 group-hover:text-white" />
                 </div>
               </div>
@@ -594,11 +588,11 @@ const App: React.FC = () => {
         {/* CUSTOMERS */}
         {activeTab === 'customers' && (
           <div className="space-y-6 md:space-y-8 animate-in fade-in">
-            {!selectedCompanyId ? (
+            {!selectedOrgId ? (
               <div className="glass-card p-12 md:p-20 rounded-3xl text-center">
                 <Building2 size={48} className="mx-auto text-slate-700 mb-6" />
-                <h3 className="text-xl md:text-2xl font-bold text-white mb-8">Choose a company first</h3>
-                <button onClick={() => setActiveTab('companies')} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-all text-sm">Select Company</button>
+                <h3 className="text-xl md:text-2xl font-bold text-white mb-8">Choose an organization first</h3>
+                <button onClick={() => setActiveTab('organizations')} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-all text-sm">Select Organization</button>
               </div>
             ) : (
               <>
@@ -610,7 +604,7 @@ const App: React.FC = () => {
                   <button onClick={() => setIsCustomerModalOpen(true)} className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-all"><Plus size={20} /><span>Add Customer</span></button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                  {customers.filter(c => c.companyId === selectedCompanyId).map((customer) => {
+                  {customers.filter(c => c.companyId === selectedOrgId).map((customer) => {
                     const customerTx = transactions.filter(t => t.customerId === customer.id);
                     const bal = customer.openingBalance + customerTx.filter(t => t.type === 'CREDIT').reduce((s, t) => s + t.amount, 0) - customerTx.filter(t => t.type === 'DEBIT').reduce((s, t) => s + t.amount, 0);
                     return (
@@ -768,12 +762,12 @@ const App: React.FC = () => {
       </main>
 
       {/* MODALS */}
-      <Modal isOpen={isCompanyModalOpen} onClose={() => setIsCompanyModalOpen(false)} title="New Company">
-        <InputField label="Company Name" autoFocus value={companyForm.name} onChange={(v) => setCompanyForm({ ...companyForm, name: v })} placeholder="Acme Corp" />
-        <InputField label="Address" value={companyForm.address} onChange={(v) => setCompanyForm({ ...companyForm, address: v })} placeholder="123 Street" />
-        <InputField label="GST Number" value={companyForm.gst} onChange={(v) => setCompanyForm({ ...companyForm, gst: v })} placeholder="Optional" />
-        <InputField label="Financial Year" value={companyForm.fy} onChange={(v) => setCompanyForm({ ...companyForm, fy: v })} />
-        <button onClick={handleAddCompany} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl shadow-lg mt-4 transition-all text-sm">Create Organization</button>
+      <Modal isOpen={isOrgModalOpen} onClose={() => setIsOrgModalOpen(false)} title="New Organization">
+        <InputField label="Organization Name" autoFocus value={orgForm.name} onChange={(v) => setOrgForm({ ...orgForm, name: v })} placeholder="Acme Corp" />
+        <InputField label="Address" value={orgForm.address} onChange={(v) => setOrgForm({ ...orgForm, address: v })} placeholder="123 Street" />
+        <InputField label="GST Number" value={orgForm.gst} onChange={(v) => setOrgForm({ ...orgForm, gst: v })} placeholder="Optional" />
+        <InputField label="Financial Year" value={orgForm.fy} onChange={(v) => setOrgForm({ ...orgForm, fy: v })} />
+        <button onClick={handleAddOrg} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl shadow-lg mt-4 transition-all text-sm">Create Organization</button>
       </Modal>
 
       <Modal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} title="New Customer">
